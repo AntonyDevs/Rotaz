@@ -34,6 +34,9 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
 #scan[hidden]{display:none}
 #scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .frame{position:absolute;left:50%;top:50%;width:62vmin;height:62vmin;transform:translate(-50%,-50%);border:3px solid #fff;border-radius:18px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
+#ctl{position:absolute;left:16px;right:16px;bottom:calc(90px + env(safe-area-inset-bottom));z-index:2;display:flex;gap:12px;align-items:center;color:#fff;font-size:13px}
+#ctl[hidden]{display:none}
+#ctl input{flex:1;accent-color:#fff}
 #close{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:2}
 .hint{position:absolute;left:0;right:0;bottom:calc(40px + env(safe-area-inset-bottom));text-align:center;color:#fff;font-size:14px;z-index:2}
 #pick,#add{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -72,6 +75,7 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
   <video id="vid" playsinline muted></video>
   <div class="frame"></div>
   <button class="btn" id="close">Fechar</button>
+  <div id="ctl" hidden><span>🔍</span><input type="range" id="zoom"><button class="btn" id="torch" hidden>🔦</button></div>
   <div class="hint">Aponte para o QR Code e afaste um pouco o celular até focar</div>
 </div>
 <div id="pick" hidden>
@@ -234,6 +238,9 @@ $('pk').onclick = () => {
   toast(out.length + ' tarefas importadas', 'good');
 };
 
+$('zoom').oninput = () => { try { track.applyConstraints({ advanced: [{ zoom: +$('zoom').value }] }); } catch(e){} };
+$('torch').onclick = () => { torchOn = !torchOn; try { track.applyConstraints({ advanced: [{ torch: torchOn }] }); } catch(e){} };
+
 // ---- Adicionar tarefa não encontrada ----
 function openAdd(code){
   paused = true; addCode = code;
@@ -254,7 +261,7 @@ $('ak').onclick = () => {
 };
 
 // ---- Leitor de QR Code ----
-let stream, running = false, lastCode = '', lastTime = 0, paused = false, addCode = '';
+let stream, track, torchOn = false, running = false, lastCode = '', lastTime = 0, paused = false, addCode = '';
 const skip = new Set();
 const vid = $('vid'), cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
 
@@ -263,10 +270,21 @@ $('open').onclick = async () => {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
   } catch(e){ toast('Não foi possível acessar a câmera', 'bad'); return; }
   vid.srcObject = stream;
+  track = stream.getVideoTracks()[0];
+  let caps = {};
+  try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch(e){}
   try {
-    const tr = stream.getVideoTracks()[0], caps = tr.getCapabilities ? tr.getCapabilities() : {};
-    if (caps.focusMode && caps.focusMode.includes('continuous')) await tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+    if (caps.focusMode && caps.focusMode.includes('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
   } catch(e){}
+  $('ctl').hidden = true; $('torch').hidden = true; torchOn = false;
+  if (caps.zoom){
+    const z = $('zoom');
+    z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step || 0.1;
+    z.value = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2));
+    try { await track.applyConstraints({ advanced: [{ zoom: +z.value }] }); } catch(e){}
+    $('ctl').hidden = false;
+  }
+  if (caps.torch){ $('torch').hidden = false; $('ctl').hidden = false; }
   await vid.play();
   skip.clear(); paused = false;
   $('scan').hidden = false; running = true; loop();
@@ -281,21 +299,25 @@ function stop(){
 let bd = null, busy = false;
 try { if ('BarcodeDetector' in window) bd = new BarcodeDetector({ formats: ['qr_code'] }); } catch(e){}
 
+function scanJs(sx, sy, sw, sh){
+  const k = Math.min(1, 1000 / sw);
+  cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
+  cx.drawImage(vid, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  const d = cx.getImageData(0, 0, cv.width, cv.height);
+  const r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
+  return r && r.data ? r.data : '';
+}
+
 async function loop(){
   if (!running) return;
   if (vid.videoWidth && !paused && !busy){
     busy = true;
     try {
+      const W = vid.videoWidth, H = vid.videoHeight;
       let val = '';
       if (bd){ const r = await bd.detect(vid); if (r.length) val = r[0].rawValue; }
-      if (!val){
-        const s = Math.min(1, 1000 / vid.videoWidth);
-        cv.width = vid.videoWidth * s; cv.height = vid.videoHeight * s;
-        cx.drawImage(vid, 0, 0, cv.width, cv.height);
-        const d = cx.getImageData(0, 0, cv.width, cv.height);
-        const r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
-        if (r && r.data) val = r.data;
-      }
+      if (!val) val = scanJs(W * .15, H * .2, W * .7, H * .6); // centro, mais detalhe
+      if (!val) val = scanJs(0, 0, W, H);                       // quadro inteiro
       if (val) handle(val.trim());
     } catch(e){}
     busy = false;
