@@ -39,9 +39,9 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
 #ctl input{flex:1;accent-color:#fff}
 #close{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:2}
 .hint{position:absolute;left:0;right:0;bottom:calc(40px + env(safe-area-inset-bottom));text-align:center;color:#fff;font-size:14px;z-index:2}
-#pick,#add{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;display:flex;align-items:center;justify-content:center;padding:20px}
-#pick[hidden],#add[hidden]{display:none}
-#add{z-index:26}
+#pick,#add,#cf{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;display:flex;align-items:center;justify-content:center;padding:20px}
+#pick[hidden],#add[hidden],#cf[hidden]{display:none}
+#add,#cf{z-index:26}
 .box{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:380px}
 .box h2{font-size:17px;margin:0 0 14px}
 .box label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px;color:#374151}
@@ -101,6 +101,18 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
     <div class="row" style="margin-top:18px">
       <button class="btn gray" id="ac">Não</button>
       <button class="btn blue" id="ak">Adicionar</button>
+    </div>
+  </div>
+</div>
+<div id="cf" hidden>
+  <div class="box">
+    <h2>Tarefa encontrada</h2>
+    <div class="big" id="cfcode"></div>
+    <div class="desc" id="cfdesc" style="margin:8px 0 0"></div>
+    <p style="font-size:14px;color:#374151;margin:14px 0 0">Deseja dar baixa e marcar como <b>concluída</b>?</p>
+    <div class="row" style="margin-top:18px">
+      <button class="btn gray" id="cn">Não</button>
+      <button class="btn blue" id="cy">Concluir</button>
     </div>
   </div>
 </div>
@@ -332,10 +344,28 @@ function handle(code){
   const t = tasks.find(t => t.id === code) || tasks.find(t => t.id.toLowerCase() === code.toLowerCase());
   if (!t){ if (!skip.has(code)) openAdd(code); return; }
   if (t.done){ toast(t.id + ' já estava concluída'); return; }
+  if (skip.has(t.id)) return;
+  openConfirm(t);
+}
+
+// ---- Confirmar baixa ----
+let cfTask = null;
+function openConfirm(t){
+  paused = true; cfTask = t;
+  $('cfcode').textContent = '#' + (tasks.indexOf(t) + 1) + ' · ' + t.id;
+  $('cfdesc').textContent = t.desc || '';
+  $('cf').hidden = false;
+  if (navigator.vibrate) navigator.vibrate(60);
+}
+function closeConfirm(){ $('cf').hidden = true; paused = false; cfTask = null; }
+$('cn').onclick = () => { if (cfTask) skip.add(cfTask.id); closeConfirm(); };
+$('cy').onclick = () => {
+  const t = cfTask; closeConfirm();
+  if (!t) return;
   t.done = true; save(); render();
   if (navigator.vibrate) navigator.vibrate(120);
   toast('✓ ' + t.id + ' concluída', 'good');
-}
+};
 
 render();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
