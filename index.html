@@ -36,11 +36,14 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
 .frame{position:absolute;left:50%;top:50%;width:62vmin;height:62vmin;transform:translate(-50%,-50%);border:3px solid #fff;border-radius:18px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
 #close{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:2}
 .hint{position:absolute;left:0;right:0;bottom:calc(40px + env(safe-area-inset-bottom));text-align:center;color:#fff;font-size:14px;z-index:2}
-#pick{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;display:flex;align-items:center;justify-content:center;padding:20px}
-#pick[hidden]{display:none}
+#pick,#add{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;display:flex;align-items:center;justify-content:center;padding:20px}
+#pick[hidden],#add[hidden]{display:none}
+#add{z-index:26}
 .box{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:380px}
 .box h2{font-size:17px;margin:0 0 14px}
-.box select{width:100%;padding:12px;font-size:16px;border:1px solid #d1d5db;border-radius:10px;background:#fff}
+.box label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px;color:#374151}
+.box .big{font-size:18px;font-weight:700;word-break:break-all;color:#2563eb}
+.box select,.box input{width:100%;padding:12px;font-size:16px;border:1px solid #d1d5db;border-radius:10px;background:#fff}
 .prev{font-size:13px;color:#6b7280;margin:10px 0 18px;word-break:break-word}
 .row{display:flex;gap:10px}
 .row .btn{flex:1;padding:12px}
@@ -79,6 +82,21 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
     <div class="row">
       <button class="btn gray" id="pc">Cancelar</button>
       <button class="btn blue" id="pk">Importar</button>
+    </div>
+  </div>
+</div>
+<div id="add" hidden>
+  <div class="box">
+    <h2>Código não encontrado</h2>
+    <div class="big" id="addcode"></div>
+    <p style="font-size:14px;color:#6b7280;margin:8px 0 0">Deseja adicionar como nova tarefa pendente? Ela ficará por último na lista.</p>
+    <label for="addr">Destination Address</label>
+    <input id="addr" type="text" autocomplete="off">
+    <label for="bairro">Bairro</label>
+    <input id="bairro" type="text" autocomplete="off">
+    <div class="row" style="margin-top:18px">
+      <button class="btn gray" id="ac">Não</button>
+      <button class="btn blue" id="ak">Adicionar</button>
     </div>
   </div>
 </div>
@@ -216,8 +234,28 @@ $('pk').onclick = () => {
   toast(out.length + ' tarefas importadas', 'good');
 };
 
+// ---- Adicionar tarefa não encontrada ----
+function openAdd(code){
+  paused = true; addCode = code;
+  $('addcode').textContent = code;
+  $('addr').value = ''; $('bairro').value = '';
+  $('add').hidden = false;
+  if (navigator.vibrate) navigator.vibrate(60);
+}
+function closeAdd(){ $('add').hidden = true; paused = false; }
+$('ac').onclick = () => { skip.add(addCode); closeAdd(); };
+$('ak').onclick = () => {
+  const a = $('addr').value.trim(), b = $('bairro').value.trim();
+  const desc = [a && 'Destination Address: ' + a, b && 'Bairro: ' + b].filter(Boolean).join('\n');
+  tasks.push({ id: addCode, desc, done: false });
+  save(); render(); closeAdd();
+  if (navigator.vibrate) navigator.vibrate(120);
+  toast('✓ ' + addCode + ' adicionada como última pendente', 'good');
+};
+
 // ---- Leitor de QR Code ----
-let stream, running = false, lastCode = '', lastTime = 0;
+let stream, running = false, lastCode = '', lastTime = 0, paused = false, addCode = '';
+const skip = new Set();
 const vid = $('vid'), cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
 
 $('open').onclick = async () => {
@@ -226,6 +264,7 @@ $('open').onclick = async () => {
   } catch(e){ toast('Não foi possível acessar a câmera', 'bad'); return; }
   vid.srcObject = stream;
   await vid.play();
+  skip.clear(); paused = false;
   $('scan').hidden = false; running = true; loop();
 };
 $('close').onclick = stop;
@@ -237,7 +276,7 @@ function stop(){
 
 function loop(){
   if (!running) return;
-  if (vid.videoWidth){
+  if (vid.videoWidth && !paused){
     const s = Math.min(1, 640 / vid.videoWidth);
     cv.width = vid.videoWidth * s; cv.height = vid.videoHeight * s;
     cx.drawImage(vid, 0, 0, cv.width, cv.height);
@@ -253,7 +292,7 @@ function handle(code){
   if (code === lastCode && now - lastTime < 2500) return;
   lastCode = code; lastTime = now;
   const t = tasks.find(t => t.id === code) || tasks.find(t => t.id.toLowerCase() === code.toLowerCase());
-  if (!t){ toast('Código não encontrado: ' + code, 'bad'); return; }
+  if (!t){ if (!skip.has(code)) openAdd(code); return; }
   if (t.done){ toast(t.id + ' já estava concluída'); return; }
   t.done = true; save(); render();
   if (navigator.vibrate) navigator.vibrate(120);
