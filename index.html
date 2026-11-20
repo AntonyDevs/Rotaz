@@ -23,7 +23,7 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
 .num{min-width:34px;height:34px;padding:0 6px;border-radius:17px;background:#dbeafe;color:#1d4ed8;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
 .info{flex:1;min-width:0}
 .code{font-weight:700;font-size:15px;word-break:break-all}
-.desc{font-size:13px;color:#6b7280;margin-top:2px;word-break:break-word}
+.desc{white-space:pre-line;font-size:13px;color:#6b7280;margin-top:2px;word-break:break-word}
 .acts{display:flex;gap:6px}
 .ic{width:38px;height:38px;border-radius:9px;border:1px solid #d1d5db;background:#f9fafb;font-size:16px;cursor:pointer}
 .ic:disabled{opacity:.3}
@@ -168,23 +168,24 @@ $('file').onchange = async e => {
     const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
     const hdr = rows.shift() || [];
-    const n = Math.max(hdr.length, ...rows.map(r => r.length));
-    if (!rows.length || !n) { toast('Nenhuma tarefa encontrada na planilha', 'bad'); return; }
-    openPick(hdr, rows, n);
+    const norm = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const WANTED = ['at id', 'spx tn', 'destination address', 'bairro'];
+    const cols = [];
+    WANTED.forEach(w => { const i = hdr.findIndex(h => norm(h) === w); if (i >= 0) cols.push(i); });
+    if (!rows.length) { toast('Nenhuma tarefa encontrada na planilha', 'bad'); return; }
+    if (!cols.length) { toast('Colunas não encontradas. Esperado: AT ID, SPX TN, Destination Address, Bairro', 'bad'); return; }
+    openPick(hdr, rows, cols);
   } catch(err){ toast('Erro ao ler a planilha', 'bad'); }
 };
 
 // ---- Escolha da coluna do código ----
 let pk = null;
-function openPick(hdr, rows, n){
-  pk = { rows, n };
-  let def = 0;
-  const opts = [];
-  for (let i = 0; i < n; i++){
-    const h = String(hdr[i] ?? '').trim();
-    if (!def && /c[óo]d|code|\bid\b|qr/i.test(h)) def = i;
-    opts.push('<option value="' + i + '">' + esc((String.fromCharCode(65 + i % 26)) + ' – ' + (h || 'Coluna ' + (i + 1))) + '</option>');
-  }
+function openPick(hdr, rows, cols){
+  pk = { rows, cols, hdr };
+  const label = i => String(hdr[i] ?? '').trim();
+  const opts = cols.map(i => '<option value="' + i + '">' + esc(label(i)) + '</option>');
+  let def = cols.find(i => label(i).toLowerCase() === 'spx tn');
+  if (def === undefined) def = cols[0];
   $('col').innerHTML = opts.join('');
   $('col').value = def;
   prevCol();
@@ -203,7 +204,10 @@ $('pk').onclick = () => {
     const id = String(r[c] ?? '').trim();
     if (!id || seen.has(id)) return;
     seen.add(id);
-    const desc = r.filter((v, i) => i !== c).map(v => String(v).trim()).filter(Boolean).join(' · ');
+    const desc = pk.cols.filter(i => i !== c).map(i => {
+      const v = String(r[i] ?? '').trim();
+      return v ? String(pk.hdr[i]).trim() + ': ' + v : '';
+    }).filter(Boolean).join('\n');
     out.push({ id, desc, done: false, n: out.length + 1 });
   });
   $('pick').hidden = true; pk = null;
