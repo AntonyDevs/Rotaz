@@ -117,7 +117,7 @@ function render(){
       : 'Nenhuma tarefa.<br>Toque em <b>Anexar planilha</b> para importar.<br><small>A 1ª coluna deve ser o código do QR Code.</small>') + '</div>';
     return;
   }
-  $('list').innerHTML = L.map((t, i) => '<div class="item"><div class="num">' + t.n + '</div><div class="info"><div class="code">' + esc(t.id) +
+  $('list').innerHTML = L.map((t, i) => '<div class="item"><div class="num">' + (tasks.indexOf(t) + 1) + '</div><div class="info"><div class="code">' + esc(t.id) +
     '</div>' + (t.desc ? '<div class="desc">' + esc(t.desc) + '</div>' : '') + '</div><div class="acts">' +
     (tab === 'pend'
       ? '<button class="ic" data-a="up" data-i="' + esc(t.id) + '"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
