@@ -7,7 +7,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Tarefas QR</title>
+<title>Rota em andamento</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f3f4f6;color:#111827;padding-top:env(safe-area-inset-top)}
@@ -60,7 +60,7 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
 </head>
 <body>
 <header>
-  <h1>Tarefas QR</h1>
+  <h1>Rota em andamento</h1>
   <div class="hb"><button class="btn" id="clr">🗑 Limpar</button><button class="btn" id="imp">📎 Planilha</button></div>
 </header>
 <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
@@ -94,7 +94,7 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
     <h2>Código não encontrado</h2>
     <div class="big" id="addcode"></div>
     <p style="font-size:14px;color:#6b7280;margin:8px 0 0">Deseja adicionar como nova tarefa pendente? Ela ficará por último na lista.</p>
-    <label for="addr">Destination Address</label>
+    <label for="addr">Endereço</label>
     <input id="addr" type="text" autocomplete="off">
     <label for="bairro">Bairro</label>
     <input id="bairro" type="text" autocomplete="off">
@@ -123,7 +123,7 @@ main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
 <script>
 const KEY = 'tarefas-qr-v1';
 let tasks = load();
-tasks.forEach((t, i) => { if (!t.n) t.n = i + 1; });
+tasks.forEach((t, i) => { if (!t.n) t.n = i + 1; if (t.desc) t.desc = t.desc.replace(/Destination Address:/g, 'Endereço:'); });
 let tab = 'pend';
 const $ = id => document.getElementById(id);
 
@@ -213,11 +213,12 @@ $('file').onchange = async e => {
 };
 
 // ---- Escolha da coluna do código ----
+const nice = h => h.toLowerCase().replace(/\s+/g, ' ') === 'destination address' ? 'Endereço' : h;
 let pk = null;
 function openPick(hdr, rows, cols){
   pk = { rows, cols, hdr };
   const label = i => String(hdr[i] ?? '').trim();
-  const opts = cols.map(i => '<option value="' + i + '">' + esc(label(i)) + '</option>');
+  const opts = cols.map(i => '<option value="' + i + '">' + esc(nice(label(i))) + '</option>');
   let def = cols.find(i => label(i).toLowerCase() === 'spx tn');
   if (def === undefined) def = cols[0];
   $('col').innerHTML = opts.join('');
@@ -240,7 +241,7 @@ $('pk').onclick = () => {
     seen.add(id);
     const desc = pk.cols.filter(i => i !== c).map(i => {
       const v = String(r[i] ?? '').trim();
-      return v ? String(pk.hdr[i]).trim() + ': ' + v : '';
+      return v ? nice(String(pk.hdr[i]).trim()) + ': ' + v : '';
     }).filter(Boolean).join('\n');
     out.push({ id, desc, done: false, n: out.length + 1 });
   });
@@ -265,7 +266,7 @@ function closeAdd(){ $('add').hidden = true; paused = false; }
 $('ac').onclick = () => { skip.add(addCode); closeAdd(); };
 $('ak').onclick = () => {
   const a = $('addr').value.trim(), b = $('bairro').value.trim();
-  const desc = [a && 'Destination Address: ' + a, b && 'Bairro: ' + b].filter(Boolean).join('\n');
+  const desc = [a && 'Endereço: ' + a, b && 'Bairro: ' + b].filter(Boolean).join('\n');
   tasks.push({ id: addCode, desc, done: false });
   save(); render(); closeAdd();
   if (navigator.vibrate) navigator.vibrate(120);

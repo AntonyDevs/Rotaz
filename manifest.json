@@ -1,6 +1,6 @@
 {
-  "name": "Tarefas QR",
-  "short_name": "Tarefas QR",
+  "name": "Rota em andamento",
+  "short_name": "Rota",
   "description": "Organize tarefas a partir de uma planilha e conclua lendo QR Codes.",
   "start_url": "./index.html",
   "scope": "./",
