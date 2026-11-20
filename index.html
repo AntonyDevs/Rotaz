@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Tarefas QR</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f3f4f6;color:#111827;padding-top:env(safe-area-inset-top)}
+header{background:#2563eb;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:19px;margin:0}
+.btn{border:0;border-radius:10px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;background:#fff;color:#2563eb}
+.tabs{display:flex;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:5}
+.tab{flex:1;padding:13px;text-align:center;font-weight:600;color:#6b7280;border:0;background:none;font-size:15px;border-bottom:3px solid transparent}
+.tab.on{color:#2563eb;border-color:#2563eb}
+main{padding:12px 12px calc(100px + env(safe-area-inset-bottom))}
+.item{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.info{flex:1;min-width:0}
+.code{font-weight:700;font-size:15px;word-break:break-all}
+.desc{font-size:13px;color:#6b7280;margin-top:2px;word-break:break-word}
+.acts{display:flex;gap:6px}
+.ic{width:38px;height:38px;border-radius:9px;border:1px solid #d1d5db;background:#f9fafb;font-size:16px;cursor:pointer}
+.ic:disabled{opacity:.3}
+.ok{background:#16a34a;color:#fff;border-color:#16a34a}
+.empty{text-align:center;color:#6b7280;padding:48px 20px;line-height:1.5}
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));background:#2563eb;color:#fff;border:0;border-radius:30px;padding:16px 28px;font-size:16px;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.45);cursor:pointer}
+#scan{position:fixed;inset:0;background:#000;z-index:20;display:flex;flex-direction:column}
+#scan[hidden]{display:none}
+#scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.frame{position:absolute;left:50%;top:50%;width:62vmin;height:62vmin;transform:translate(-50%,-50%);border:3px solid #fff;border-radius:18px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
+#close{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:2}
+.hint{position:absolute;left:0;right:0;bottom:calc(40px + env(safe-area-inset-bottom));text-align:center;color:#fff;font-size:14px;z-index:2}
+#pick{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;display:flex;align-items:center;justify-content:center;padding:20px}
+#pick[hidden]{display:none}
+.box{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:380px}
+.box h2{font-size:17px;margin:0 0 14px}
+.box select{width:100%;padding:12px;font-size:16px;border:1px solid #d1d5db;border-radius:10px;background:#fff}
+.prev{font-size:13px;color:#6b7280;margin:10px 0 18px;word-break:break-word}
+.row{display:flex;gap:10px}
+.row .btn{flex:1;padding:12px}
+.btn.gray{background:#e5e7eb;color:#374151}
+.btn.blue{background:#2563eb;color:#fff}
+#toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%);background:#111827;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;z-index:30;max-width:90%;text-align:center;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.show{opacity:1}
+#toast.good{background:#16a34a}
+#toast.bad{background:#dc2626}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tarefas QR</h1>
+  <button class="btn" id="imp">📎 Anexar planilha</button>
+</header>
+<input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+<div class="tabs">
+  <button class="tab on" data-t="pend" id="tp">Pendentes</button>
+  <button class="tab" data-t="done" id="td">Finalizadas</button>
+</div>
+<main id="list"></main>
+<button class="fab" id="open">📷 Ler QR Code</button>
+
+<div id="scan" hidden>
+  <video id="vid" playsinline muted></video>
+  <div class="frame"></div>
+  <button class="btn" id="close">Fechar</button>
+  <div class="hint">Aponte para o QR Code da tarefa</div>
+</div>
+<div id="pick" hidden>
+  <div class="box">
+    <h2>Qual coluna tem o código do QR Code?</h2>
+    <select id="col"></select>
+    <div class="prev" id="prev"></div>
+    <div class="row">
+      <button class="btn gray" id="pc">Cancelar</button>
+      <button class="btn blue" id="pk">Importar</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+const KEY = 'tarefas-qr-v1';
+let tasks = load();
+let tab = 'pend';
+const $ = id => document.getElementById(id);
+
+function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ return []; } }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(tasks)); } catch(e){} }
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+let tt;
+function toast(msg, type){
+  const t = $('toast');
+  t.textContent = msg; t.className = 'show ' + (type || '');
+  clearTimeout(tt); tt = setTimeout(() => t.className = '', 2200);
+}
+
+function render(){
+  const pend = tasks.filter(t => !t.done);
+  const done = tasks.filter(t => t.done);
+  $('tp').textContent = 'Pendentes (' + pend.length + ')';
+  $('td').textContent = 'Finalizadas (' + done.length + ')';
+  $('tp').classList.toggle('on', tab === 'pend');
+  $('td').classList.toggle('on', tab === 'done');
+  const L = tab === 'pend' ? pend : done;
+  if (!L.length){
+    $('list').innerHTML = '<div class="empty">' + (tasks.length
+      ? (tab === 'pend' ? 'Nenhuma tarefa pendente 🎉' : 'Nenhuma tarefa finalizada ainda.')
+      : 'Nenhuma tarefa.<br>Toque em <b>Anexar planilha</b> para importar.<br><small>A 1ª coluna deve ser o código do QR Code.</small>') + '</div>';
+    return;
+  }
+  $('list').innerHTML = L.map((t, i) => '<div class="item"><div class="info"><div class="code">' + esc(t.id) +
+    '</div>' + (t.desc ? '<div class="desc">' + esc(t.desc) + '</div>' : '') + '</div><div class="acts">' +
+    (tab === 'pend'
+      ? '<button class="ic" data-a="up" data-i="' + esc(t.id) + '"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+        '<button class="ic" data-a="dn" data-i="' + esc(t.id) + '"' + (i === L.length - 1 ? ' disabled' : '') + '>▼</button>' +
+        '<button class="ic ok" data-a="ok" data-i="' + esc(t.id) + '">✓</button>'
+      : '<button class="ic" data-a="undo" data-i="' + esc(t.id) + '">↩</button>') +
+    '</div></div>').join('');
+}
+
+$('list').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const id = b.dataset.i, a = b.dataset.a;
+  if (a === 'up' || a === 'dn') move(id, a === 'up' ? -1 : 1);
+  else if (a === 'ok') setDone(id, true);
+  else if (a === 'undo') setDone(id, false);
+};
+
+function move(id, dir){
+  const idx = tasks.map((t, i) => t.done ? -1 : i).filter(i => i >= 0);
+  const p = idx.findIndex(i => tasks[i].id === id);
+  const q = p + dir;
+  if (p < 0 || q < 0 || q >= idx.length) return;
+  [tasks[idx[p]], tasks[idx[q]]] = [tasks[idx[q]], tasks[idx[p]]];
+  save(); render();
+}
+
+function setDone(id, v){
+  const t = tasks.find(t => t.id === id); if (!t) return;
+  t.done = v; save(); render();
+}
+
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
+
+// ---- Importar planilha ----
+$('imp').onclick = () => $('file').click();
+$('file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  if (tasks.length && !confirm('Isso vai substituir as tarefas atuais. Continuar?')) return;
+  try {
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    const hdr = rows.shift() || [];
+    const n = Math.max(hdr.length, ...rows.map(r => r.length));
+    if (!rows.length || !n) { toast('Nenhuma tarefa encontrada na planilha', 'bad'); return; }
+    openPick(hdr, rows, n);
+  } catch(err){ toast('Erro ao ler a planilha', 'bad'); }
+};
+
+// ---- Escolha da coluna do código ----
+let pk = null;
+function openPick(hdr, rows, n){
+  pk = { rows, n };
+  let def = 0;
+  const opts = [];
+  for (let i = 0; i < n; i++){
+    const h = String(hdr[i] ?? '').trim();
+    if (!def && /c[óo]d|code|\bid\b|qr/i.test(h)) def = i;
+    opts.push('<option value="' + i + '">' + esc((String.fromCharCode(65 + i % 26)) + ' – ' + (h || 'Coluna ' + (i + 1))) + '</option>');
+  }
+  $('col').innerHTML = opts.join('');
+  $('col').value = def;
+  prevCol();
+  $('pick').hidden = false;
+}
+function prevCol(){
+  const c = +$('col').value;
+  const ex = pk.rows.map(r => String(r[c] ?? '').trim()).filter(Boolean).slice(0, 3);
+  $('prev').innerHTML = 'Exemplos: ' + (ex.length ? ex.map(esc).join(', ') : '(coluna vazia)');
+}
+$('col').onchange = prevCol;
+$('pc').onclick = () => { $('pick').hidden = true; pk = null; };
+$('pk').onclick = () => {
+  const c = +$('col').value, seen = new Set(), out = [];
+  pk.rows.forEach(r => {
+    const id = String(r[c] ?? '').trim();
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const desc = r.filter((v, i) => i !== c).map(v => String(v).trim()).filter(Boolean).join(' · ');
+    out.push({ id, desc, done: false });
+  });
+  $('pick').hidden = true; pk = null;
+  if (!out.length) { toast('A coluna escolhida está vazia', 'bad'); return; }
+  tasks = out; tab = 'pend'; save(); render();
+  toast(out.length + ' tarefas importadas', 'good');
+};
+
+// ---- Leitor de QR Code ----
+let stream, running = false, lastCode = '', lastTime = 0;
+const vid = $('vid'), cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+
+$('open').onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+  } catch(e){ toast('Não foi possível acessar a câmera', 'bad'); return; }
+  vid.srcObject = stream;
+  await vid.play();
+  $('scan').hidden = false; running = true; loop();
+};
+$('close').onclick = stop;
+function stop(){
+  running = false; $('scan').hidden = true;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  vid.srcObject = null;
+}
+
+function loop(){
+  if (!running) return;
+  if (vid.videoWidth){
+    const s = Math.min(1, 640 / vid.videoWidth);
+    cv.width = vid.videoWidth * s; cv.height = vid.videoHeight * s;
+    cx.drawImage(vid, 0, 0, cv.width, cv.height);
+    const d = cx.getImageData(0, 0, cv.width, cv.height);
+    const r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'dontInvert' });
+    if (r && r.data) handle(r.data.trim());
+  }
+  requestAnimationFrame(loop);
+}
+
+function handle(code){
+  const now = Date.now();
+  if (code === lastCode && now - lastTime < 2500) return;
+  lastCode = code; lastTime = now;
+  const t = tasks.find(t => t.id === code) || tasks.find(t => t.id.toLowerCase() === code.toLowerCase());
+  if (!t){ toast('Código não encontrado: ' + code, 'bad'); return; }
+  if (t.done){ toast(t.id + ' já estava concluída'); return; }
+  t.done = true; save(); render();
+  if (navigator.vibrate) navigator.vibrate(120);
+  toast('✓ ' + t.id + ' concluída', 'good');
+}
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
